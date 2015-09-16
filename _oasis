@@ -12,12 +12,24 @@ AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
 
 Synopsis:    Utility modules for Lwt
 
+Flag "bench"
+  Description:      compile benchmarks
+  Default:          false
+
 Library "containers_lwt"
   Path:             src/
   Modules:          Lwt_automaton, Lwt_actor, Lwt_klist, Lwt_pipe
   Pack:             true
   FindlibName:      containers_lwt
   BuildDepends:     containers, lwt, containers.misc
+
+Executable run_bench_io
+  Path:             benchs/
+  Install:          false
+  CompiledObject:   native
+  Build$:           flag(bench)
+  MainIs:           run_bench_io.ml
+  BuildDepends:     containers, containers_lwt, unix, lwt.unix, benchmark
 
 Document "containers-lwt"
   Title:                Containers-lwt docs

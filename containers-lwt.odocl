@@ -1,0 +1,7 @@
+# OASIS_START
+# DO NOT EDIT (digest: 150557154c14b647bf01cc37bd5b782c)
+src/Lwt_automaton
+src/Lwt_actor
+src/Lwt_klist
+src/Lwt_pipe
+# OASIS_STOP

@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: c609a153af37510f49f4d258a0a647d6)
+# DO NOT EDIT (digest: 8e2050e962b001b7636500d0251ff80c)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -23,6 +23,21 @@ true: annot, bin_annot
 <src/*.ml{,i,y}>: package(containers)
 <src/*.ml{,i,y}>: package(containers.misc)
 <src/*.ml{,i,y}>: package(lwt)
+# Executable run_bench_io
+"benchs/run_bench_io.native": package(benchmark)
+"benchs/run_bench_io.native": package(containers)
+"benchs/run_bench_io.native": package(containers.misc)
+"benchs/run_bench_io.native": package(lwt)
+"benchs/run_bench_io.native": package(lwt.unix)
+"benchs/run_bench_io.native": package(unix)
+"benchs/run_bench_io.native": use_containers_lwt
+<benchs/*.ml{,i,y}>: package(benchmark)
+<benchs/*.ml{,i,y}>: package(containers)
+<benchs/*.ml{,i,y}>: package(containers.misc)
+<benchs/*.ml{,i,y}>: package(lwt)
+<benchs/*.ml{,i,y}>: package(lwt.unix)
+<benchs/*.ml{,i,y}>: package(unix)
+<benchs/*.ml{,i,y}>: use_containers_lwt
 # Executable run_qtest_lwt
 <qtest/run_qtest_lwt.{native,byte}>: package(QTest2Lib)
 <qtest/run_qtest_lwt.{native,byte}>: package(containers)
