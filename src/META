@@ -1,3 +1,12 @@
 # OASIS_START
+# DO NOT EDIT (digest: 7485a3efd1838b4b03e1508f436d200c)
+version = "0.1"
+description = "Utility modules for Lwt"
+requires = "containers lwt containers.misc"
+archive(byte) = "containers_lwt.cma"
+archive(byte, plugin) = "containers_lwt.cma"
+archive(native) = "containers_lwt.cmxa"
+archive(native, plugin) = "containers_lwt.cmxs"
+exists_if = "containers_lwt.cma"
 # OASIS_STOP
 
