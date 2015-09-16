@@ -214,5 +214,8 @@ let to_list l = to_rev_list l >|= List.rev
 
 (*$Q
   (Q.list Q.int) (fun l -> Lwt_main.run (of_list l |> to_list) = l)
+  (Q.list Q.int) (fun l -> \
+    let f x = x+1 in \
+    Lwt_main.run (of_list l |> map f |> to_list) = List.map f l)
 *)
 

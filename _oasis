@@ -1,0 +1,51 @@
+OASISFormat: 0.4
+Name:        containers-lwt
+Version:     0.1
+Homepage:    https://github.com/c-cube/containers-lwt
+Authors:     Simon Cruanes
+License:     BSD-2-clause
+LicenseFile: LICENSE
+Plugins:     META (0.3), DevFiles (0.3)
+OCamlVersion: >= 4.00.1
+BuildTools:  ocamlbuild
+AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
+
+Synopsis:    Utility modules for Lwt
+
+Library "containers_lwt"
+  Path:             src/
+  Modules:          Lwt_automaton, Lwt_actor, Lwt_klist, Lwt_pipe
+  Pack:             true
+  FindlibName:      containers_lwt
+  BuildDepends:     containers, lwt, containers.misc
+
+Document "containers-lwt"
+  Title:                Containers-lwt docs
+  Type:                 ocamlbuild (0.3)
+  BuildTools+:          ocamldoc
+  Build$:               flag(docs)
+  Install:              true
+  XOCamlbuildPath:      .
+  XOCamlbuildExtraArgs:
+    "-docflags '-colorize-code -short-functors -charset utf-8'"
+  XOCamlbuildLibraries: containers_lwt
+
+PreBuildCommand: make qtest-gen
+
+Executable run_qtest_lwt
+  Path:             qtest/
+  Install:          false
+  CompiledObject:   best
+  MainIs:           run_qtest_lwt.ml
+  Build$:           flag(tests)
+  BuildDepends:     containers, containers_lwt, lwt, lwt.unix,
+                    sequence, gen, oUnit, QTest2Lib
+
+Test lwt
+  Command:      echo "test lwt"; ./run_qtest_lwt.native
+  Run$:         flag(tests)
+
+SourceRepository head
+  Type: git
+  Location: https://github.com/c-cube/containers-lwt
+  Browser: https://github.com/c-cube/containers-lwt/tree/master/src
