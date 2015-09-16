@@ -38,7 +38,7 @@ Executable run_qtest_lwt
   CompiledObject:   best
   MainIs:           run_qtest_lwt.ml
   Build$:           flag(tests)
-  BuildDepends:     containers, containers_lwt, lwt, lwt.unix,
+  BuildDepends:     containers, containers-lwt, lwt, lwt.unix,
                     sequence, gen, oUnit, QTest2Lib
 
 Test lwt
