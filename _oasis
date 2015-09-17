@@ -21,7 +21,7 @@ Library "containers_lwt"
   Modules:          Lwt_automaton, Lwt_actor, Lwt_klist, Lwt_pipe
   Pack:             true
   FindlibName:      containers_lwt
-  BuildDepends:     containers, lwt, containers.misc
+  BuildDepends:     containers, lwt, containers_misc
 
 Executable run_bench_io
   Path:             benchs/
