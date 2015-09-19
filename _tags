@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 21b9083b0737ce09acedf7e5af0089a7)
+# DO NOT EDIT (digest: 1e8740069c8fdcdae2a70440c53b0bd5)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -16,10 +16,6 @@ true: annot, bin_annot
 "_darcs": not_hygienic
 # Library containers_lwt
 "src/containers_lwt.cmxs": use_containers_lwt
-"src/lwt_automaton.cmx": for-pack(Containers_lwt)
-"src/lwt_actor.cmx": for-pack(Containers_lwt)
-"src/lwt_klist.cmx": for-pack(Containers_lwt)
-"src/lwt_pipe.cmx": for-pack(Containers_lwt)
 <src/*.ml{,i,y}>: package(containers)
 <src/*.ml{,i,y}>: package(containers_misc)
 <src/*.ml{,i,y}>: package(lwt)
