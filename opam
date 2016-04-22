@@ -21,6 +21,7 @@ remove: [
 ]
 depends: [
     "ocamlfind" {build}
+    "result"
     "containers"
     "lwt"
 ]
