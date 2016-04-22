@@ -1,63 +1,44 @@
 
-(*
-copyright (c) 2013-2014, simon cruanes
-all rights reserved.
+(* This file is free software. See file "license" for more details. *)
 
-redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+open Lwt.Infix
+open Result
 
-redistributions of source code must retain the above copyright notice, this
-list of conditions and the following disclaimer.  redistributions in binary
-form must reproduce the above copyright notice, this list of conditions and the
-following disclaimer in the documentation and/or other materials provided with
-the distribution.
+type 'a or_error = ('a, string) Result.result
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*)
-
-type 'a or_error = [`Ok of 'a | `Error of string]
-type 'a step = ['a or_error | `End]
-
-let (>|=) = Lwt.(>|=)
-let (>>=) = Lwt.(>>=)
+type 'a step =
+  | Yield of 'a or_error
+  | End
 
 module LwtErr = struct
   type 'a t = 'a or_error Lwt.t
 
-  let return x = Lwt.return (`Ok x)
+  let return x = Lwt.return (Ok x)
 
-  let return_unit = Lwt.return (`Ok ())
+  let return_unit = Lwt.return (Ok ())
 
-  let fail msg = Lwt.return (`Error msg)
+  let fail msg = Lwt.return (Error msg)
 
   let (>>=) x f =
     Lwt.bind x
       (function
-        | `Error msg -> fail msg
-        | `Ok y -> f y
+        | Error msg -> fail msg
+        | Ok y -> f y
       )
 
   let (>|=) x f =
     Lwt.map
       (function
-        | `Error _ as e -> e
-        | `Ok x -> `Ok (f x)
+        | Error _ as e -> e
+        | Ok x -> Ok (f x)
       ) x
 end
 
 let (>>>=) = LwtErr.(>>=)
 let (>>|=) = LwtErr.(>|=)
 
-let ret_end = Lwt.return `End
+let ret_end = Lwt.return End
+let ret_yield x = Lwt.return (Yield x)
 
 exception Closed
 
@@ -73,8 +54,12 @@ type ('a, +'perm) t = {
 
 type ('a, 'perm) pipe = ('a, 'perm) t
 
-let create ?(max_size=0) () =
+let create ?on_close ?(max_size=0) () =
   let closed, close = Lwt.wait () in
+  begin match on_close with
+    | None -> ()
+    | Some f -> Lwt.on_success closed f
+  end;
   {
     close;
     closed;
@@ -93,6 +78,8 @@ let close p =
   if is_closed p then Lwt.return_unit
   else (
     Lwt.wakeup p.close (); (* evaluate *)
+    Queue.iter (fun r -> Lwt.wakeup r End) p.readers;
+    Queue.iter (fun (_,r) -> Lwt.wakeup r ()) p.blocked_writers;
     Lwt.join p.keep;
   )
 
@@ -155,9 +142,9 @@ let write_step t x =
 
 let rec connect_rec r w =
   read r >>= function
-  | `End -> Lwt.return_unit
-  | `Error _ as step -> write_step w step
-  | `Ok _ as step ->
+  | End -> Lwt.return_unit
+  | Yield (Error _) as step -> write_step w step
+  | Yield (Ok _) as step ->
     write_step w step >>= fun () ->
     connect_rec r w
 
@@ -185,9 +172,8 @@ let link_close_l p ~after =
       )
     ) after
 
-let write_error t msg = write_step t (`Error msg)
-
-let write t x = write_step t (`Ok x)
+let write_error t msg = write_step t (Yield (Error msg))
+let write t x = write_step t (Yield (Ok x))
 
 let rec write_list t l = match l with
   | [] -> Lwt.return_unit
@@ -201,9 +187,9 @@ module Writer = struct
     let b = create() in
     let rec fwd () =
       read b >>= function
-      | `Ok x -> write a (f x) >>= fwd
-      | `Error msg -> write_error a msg >>= fun _ -> close a
-      | `End -> Lwt.return_unit
+      | Yield (Ok x) -> write a (f x) >>= fwd
+      | Yield (Error msg) -> write_error a msg >>= fun _ -> close a
+      | End -> Lwt.return_unit
     in
     keep b (fwd());
     (* when a gets closed, close b too *)
@@ -215,9 +201,9 @@ module Writer = struct
     let res = create () in
     let rec fwd () =
       read res >>= function
-      | `End -> Lwt.return_unit
-      | `Ok x -> Lwt_list.iter_p (fun p -> write p x) l >>= fwd
-      | `Error msg -> Lwt_list.iter_p (fun p -> write_error p msg) l >>= fwd
+      | End -> Lwt.return_unit
+      | Yield (Ok x) -> Lwt_list.iter_p (fun p -> write p x) l >>= fwd
+      | Yield (Error msg) -> Lwt_list.iter_p (fun p -> write_error p msg) l >>= fwd
     in
     (* do not GC before res dies; close res when any outputx is closed *)
     keep res (fwd ());
@@ -234,9 +220,9 @@ module Reader = struct
     let b = create () in
     let rec fwd () =
       read a >>= function
-      | `Ok x -> write_step b (`Ok (f x)) >>= fwd
-      | (`Error _) as e -> write_step b e >>= fun _ -> close b
-      | `End -> close b
+      | Yield (Ok x) -> write b (f x) >>= fwd
+      | Yield (Error _) as e -> write_step b e >>= fun _ -> close b
+      | End -> close b
     in
     keep b (fwd());
     b
@@ -245,9 +231,9 @@ module Reader = struct
     let b = create () in
     let rec fwd () =
       read a >>= function
-      | `Ok x -> f x >>= fun y -> write_step b (`Ok y) >>= fwd
-      | (`Error _) as e -> write_step b e >>= fun _ -> close b
-      | `End -> close b
+      | Yield (Ok x) -> f x >>= fun y -> write b y >>= fwd
+      | Yield (Error _) as e -> write_step b e >>= fun _ -> close b
+      | End -> close b
     in
     keep b (fwd());
     b
@@ -256,9 +242,9 @@ module Reader = struct
     let b = create () in
     let rec fwd () =
       read a >>= function
-      | `Ok x -> if f x then write_step b (`Ok x) >>= fwd else fwd()
-      | (`Error _) as e -> write_step b e >>= fun _ -> close b
-      | `End -> close b
+      | Yield (Ok x) -> if f x then write b x >>= fwd else fwd()
+      | Yield (Error _) as e -> write_step b e >>= fun _ -> close b
+      | End -> close b
     in
     keep b (fwd());
     b
@@ -267,48 +253,48 @@ module Reader = struct
     let b = create () in
     let rec fwd () =
       read a >>= function
-      | `Ok x ->
+      | Yield (Ok x) ->
         begin match f x with
           | None -> fwd()
-          | Some y -> write_step b (`Ok y) >>= fwd
+          | Some y -> write b y >>= fwd
         end
-      | (`Error _) as e -> write_step b e >>= fun _ -> close b
-      | `End -> close b
+      | Yield (Error _) as e -> write_step b e >>= fun _ -> close b
+      | End -> close b
     in
     keep b (fwd());
     b
 
   let rec fold ~f ~x t =
     read t >>= function
-    | `End -> LwtErr.return x
-    | `Error msg -> LwtErr.fail msg
-    | `Ok y -> fold ~f ~x:(f x y) t
+    | End -> LwtErr.return x
+    | Yield (Error msg) -> LwtErr.fail msg
+    | Yield (Ok y) -> fold ~f ~x:(f x y) t
 
   let rec fold_s ~f ~x t =
     read t >>= function
-    | `End -> LwtErr.return x
-    | `Error msg -> LwtErr.fail msg
-    | `Ok y ->
+    | End -> LwtErr.return x
+    | Yield (Error msg) -> LwtErr.fail msg
+    | Yield (Ok y) ->
       f x y >>= fun x -> fold_s ~f ~x t
 
   let rec iter ~f t =
     read t >>= function
-    | `End -> LwtErr.return_unit
-    | `Error msg -> LwtErr.fail msg
-    | `Ok x -> f x; iter ~f t
+    | End -> LwtErr.return_unit
+    | Yield (Error msg) -> LwtErr.fail msg
+    | Yield (Ok x) -> f x; iter ~f t
 
   let rec iter_s ~f t =
     read t >>= function
-    | `End -> LwtErr.return_unit
-    | `Error msg -> LwtErr.fail msg
-    | `Ok x -> f x >>= fun () -> iter_s ~f t
+    | End -> LwtErr.return_unit
+    | Yield (Error msg) -> LwtErr.fail msg
+    | Yield (Ok x) -> f x >>= fun () -> iter_s ~f t
 
   let iter_p ~f t =
     let rec iter acc =
       read t >>= function
-      | `End -> Lwt.join acc >|= fun () -> `Ok ()
-      | `Error msg -> LwtErr.fail msg
-      | `Ok x -> iter (f x :: acc)
+      | End -> Lwt.join acc >|= fun () -> Ok ()
+      | Yield (Error msg) -> LwtErr.fail msg
+      | Yield (Ok x) -> iter (f x :: acc)
     in iter []
 
   let merge_all l =
@@ -383,8 +369,8 @@ let to_list r = to_list_rev r >>|= List.rev
 
 let to_list_exn r =
   to_list r >>= function
-  | `Error msg -> Lwt.fail (Failure msg)
-  | `Ok x -> Lwt.return x
+  | Error msg -> Lwt.fail (Failure msg)
+  | Ok x -> Lwt.return x
 
 let to_buffer buf r =
   Reader.iter ~f:(fun c -> Buffer.add_char buf c) r
@@ -408,9 +394,9 @@ let join_strings ?sep r =
 let to_lwt_klist r =
   let rec next () =
     read r >>= function
-    | `End -> Lwt.return `Nil
-    | `Error _ -> Lwt.return `Nil
-    | `Ok x -> Lwt.return (`Cons (x, next ()))
+    | End -> Lwt.return `Nil
+    | Yield (Error _) -> Lwt.return `Nil
+    | Yield (Ok x) -> Lwt.return (`Cons (x, next ()))
   in
   next ()
 

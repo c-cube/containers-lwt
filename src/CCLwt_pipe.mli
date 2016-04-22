@@ -1,28 +1,5 @@
 
-(*
-copyright (c) 2013-2014, simon cruanes
-all rights reserved.
-
-redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-redistributions of source code must retain the above copyright notice, this
-list of conditions and the following disclaimer.  redistributions in binary
-form must reproduce the above copyright notice, this list of conditions and the
-following disclaimer in the documentation and/or other materials provided with
-the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*)
+(* This file is free software. See file "license" for more details. *)
 
 (** {1 Pipes, Readers, Writers}
 
@@ -32,31 +9,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   - Reader: accepts values, produces effects
   - Writer: yield values
 
-Examples:
-{[
-#require "containers.lwt";;
+    Examples:
+    {[
+      #require "maki";;
 
-module P = Containers_lwt.Lwt_pipe;;
+      module P = Maki_pipe;;
 
-let p1 =
-  P.of_list CCList.(1 -- 100)
-  |> P.Reader.map ~f:string_of_int;;
+      let p1 =
+        P.of_list CCList.(1 -- 100)
+        |> P.Reader.map ~f:string_of_int;;
 
-Lwt_io.with_file ~mode:Lwt_io.output "/tmp/foo"
-  (fun oc ->
-     let p2 = P.IO.write_lines oc in
-     P.connect ~ownership:`InOwnsOut p1 p2;
-     P.wait p2
-  );;
-]}
+      Lwt_io.with_file ~mode:Lwt_io.output "/tmp/foo"
+        (fun oc ->
+           let p2 = P.IO.write_lines oc in
+           P.connect ~ownership:`InOwnsOut p1 p2;
+           P.wait p2
+        );;
+    ]}
 
-{b status: experimental}
-
-@since 0.9
+    {b status: experimental}
 *)
 
-type 'a or_error = [`Ok of 'a | `Error of string]
-type 'a step = ['a or_error | `End]
+type 'a or_error = ('a, string) Result.result
+
+type 'a step =
+  | Yield of 'a or_error
+  | End
 
 module LwtErr : sig
   type 'a t = 'a or_error Lwt.t
@@ -82,7 +60,7 @@ val is_closed : (_,_) t -> bool
 
 val close : (_,_) t -> unit Lwt.t
 (** [close p] closes [p], which will not accept input anymore.
-    This sends [`End] to all readers connected to [p] *)
+    This sends [End] to all readers connected to [p] *)
 
 val close_async : (_,_) t -> unit
 (** Same as {!close} but closes in the background *)
@@ -90,8 +68,9 @@ val close_async : (_,_) t -> unit
 val wait : (_,_) t -> unit Lwt.t
 (** Evaluates once the pipe closes *)
 
-val create : ?max_size:int -> unit -> ('a, 'perm) t
+val create : ?on_close:(unit -> unit) -> ?max_size:int -> unit -> ('a, 'perm) t
 (** Create a new pipe.
+    @param on_close called when the pipe is closed
     @param max_size size of internal buffer. Default 0. *)
 
 val connect : ?ownership:[`None | `InOwnsOut | `OutOwnsIn] ->
